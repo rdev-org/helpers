@@ -1,20 +1,29 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
 )
 
 type ServerConfig struct {
 	Name string
 	Host string
 	Port string
+}
+
+func NewGRPCServer() *grpc.Server {
+	return grpc.NewServer(
+		grpc.UnaryInterceptor(unaryLogInterceptor),
+	)
 }
 
 func RunGRPC(cfg ServerConfig, grpcServer *grpc.Server, cleanup func()) {
@@ -42,4 +51,17 @@ func RunGRPC(cfg ServerConfig, grpcServer *grpc.Server, cleanup func()) {
 		cleanup()
 	}
 	log.Println("Server stopped gracefully.")
+}
+
+func unaryLogInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	start := time.Now()
+
+	resp, err := handler(ctx, req)
+
+	duration := time.Since(start)
+	st, _ := status.FromError(err)
+
+	log.Printf("[gRPC] Method: %s | Duration: %v | Status: %v", info.FullMethod, duration, st.Code())
+
+	return resp, err
 }
